@@ -6673,6 +6673,11 @@ body.dark-mode .modern-footer {
 	color: var(--text-light);
 	font-size: 11px;
 }
+.chat-message-error .message-content {
+    background: #fff1f0;
+    border: 1px solid #ffa39e;
+    color: #cf1322;
+}
 
 /* Dark Mode Support */
 body.dark-mode .chat-window {

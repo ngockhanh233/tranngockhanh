@@ -1,16 +1,3 @@
-/**
- * AI Chat Integration
- * Tích hợp chatbot AI để trả lời tự động
- * 
- * Hướng dẫn cấu hình:
- * 1. Chọn một trong các phương án:
- *    - OpenAI API (cần API key)
- *    - Custom AI service endpoint
- *    - Rule-based chatbot (không cần API)
- * 
- * 2. Cấu hình API endpoint và key trong AI_CHAT_CONFIG bên dưới
- */
-
 (function() {
     'use strict';
 
@@ -20,13 +7,18 @@
     var AI_CHAT_CONFIG = {
         // Phương án 1: OpenAI API
         // apiType: 'openai',
-        // apiKey: 'YOUR_OPENAI_API_KEY', // Thay bằng API key của bạn
+        // apiKey: 'YOUR_OPENAI_API_KEY',
         // apiEndpoint: 'https://api.openai.com/v1/chat/completions',
         // model: 'gpt-3.5-turbo',
 
         // Phương án 2: Custom AI Service
         apiType: 'custom',
         apiEndpoint: 'https://chatbotprojectporfolio.onrender.com/api/chat',
+
+        // Endpoint dùng để đánh thức server
+        // Nên tạo riêng endpoint nhẹ như /api/health hoặc /api/ping ở backend
+        warmupEndpoint: 'https://chatbotprojectporfolio.onrender.com/api/chat',
+
         userInfo: {
             name: 'Khanh',
             role: 'Software Developer & Guitarist',
@@ -38,84 +30,44 @@
         }
     };
 
-    // ============================================
-    // RULE-BASED RESPONSES (Fallback)
-    // ============================================
-    var ruleBasedResponses = {
-        greetings: [
-            'Xin chào! 👋 Tôi có thể giúp gì cho bạn?',
-            'Chào bạn! Bạn muốn biết gì về Khanh?',
-            'Hello! Tôi sẵn sàng trả lời các câu hỏi của bạn.'
-        ],
-        about: [
-            'Khanh là một Software Developer và Guitarist đầy đam mê. Anh ấy có hơn 1 năm kinh nghiệm lập trình và 6+ năm biểu diễn guitar trên sân khấu.',
-            'Khanh là developer chuyên về PHP Laravel, React Native, Flutter và các công nghệ web hiện đại. Ngoài ra, anh ấy còn là một guitarist với nhiều năm kinh nghiệm biểu diễn.',
-            'Khanh đang làm việc tại BSP Software với vai trò PHP Laravel Developer. Anh ấy cũng có kinh nghiệm với React Native tại Tanca Company.'
-        ],
-        skills: [
-            'Khanh có kỹ năng về: Web Development (Laravel, C#, ASP.NET), Mobile Development (React Native, Flutter), Database (MySQL, SQL Server, Oracle), và Design Tools (Figma, Photoshop, Canva).',
-            'Các công nghệ chính: PHP Laravel, React Native, Flutter, C#, ASP.NET, MySQL, và nhiều công cụ khác.',
-            'Khanh chuyên về full-stack development với Laravel, mobile apps với React Native/Flutter, và có kinh nghiệm với nhiều database systems.'
-        ],
-        contact: [
-            'Bạn có thể liên hệ Khanh qua:\n📧 Email: ngockhanh23032003@gmail.com\n📱 Phone: 0342 837 537\n📍 Location: Ho Chi Minh City, Vietnam',
-            'Để liên hệ, bạn có thể:\n- Gửi email đến ngockhanh23032003@gmail.com\n- Gọi điện: 0342 837 537\n- Hoặc điền form liên hệ trên website',
-            'Thông tin liên hệ:\nEmail: ngockhanh23032003@gmail.com\nSố điện thoại: 0342 837 537\nĐịa chỉ: Ho Chi Minh City, Vietnam'
-        ],
-        portfolio: [
-            'Bạn có thể xem portfolio và kinh nghiệm của Khanh trong phần Experience và Highlights trên website này.',
-            'Khanh đã làm việc tại Tanca Company (React Native Developer) và hiện tại tại BSP Software (PHP Laravel Developer).',
-            'Portfolio bao gồm các dự án web và mobile apps, cùng với các buổi biểu diễn guitar tại HUFLIT Music Club.'
-        ],
-        default: [
-            'Cảm ơn bạn đã quan tâm! Bạn có thể hỏi về:\n- Thông tin về Khanh\n- Kỹ năng và kinh nghiệm\n- Cách liên hệ\n- Portfolio và dự án',
-            'Tôi có thể giúp bạn tìm hiểu về Khanh. Hãy hỏi về skills, experience, hoặc cách liên hệ nhé!',
-            'Bạn muốn biết gì về Khanh? Tôi có thể trả lời về background, skills, hoặc contact information.'
-        ]
-    };
+    // Tránh gọi warmup quá nhiều lần trong 1 phiên
+    var hasWarmedUp = false;
 
     // ============================================
-    // XỬ LÝ TIN NHẮN VỚI RULE-BASED
+    // WARM UP SERVER RENDER
     // ============================================
-    function getRuleBasedResponse(message) {
-        var lowerMessage = message.toLowerCase().trim();
-        
-        // Greetings
-        if (lowerMessage.match(/^(hi|hello|chào|xin chào|hey|chào bạn)/)) {
-            return getRandomResponse(ruleBasedResponses.greetings);
+    async function warmUpServer() {
+        if (hasWarmedUp || AI_CHAT_CONFIG.apiType !== 'custom') return;
+        hasWarmedUp = true;
+
+        try {
+            var headers = {
+                'Content-Type': 'application/json'
+            };
+
+            if (AI_CHAT_CONFIG.apiKey) {
+                headers['Authorization'] = 'Bearer ' + AI_CHAT_CONFIG.apiKey;
+            }
+
+            // Nếu backend của bạn chưa có /api/ping hoặc /api/health
+            // thì tạm ping luôn /api/chat bằng payload nhẹ
+            await fetch(AI_CHAT_CONFIG.warmupEndpoint, {
+                method: 'POST',
+                headers: headers,
+                body: JSON.stringify({
+                    message: '__warmup__'
+                })
+            });
+
+            console.log('Server warm-up request sent.');
+        } catch (error) {
+            console.warn('Warm-up failed:', error);
         }
-        
-        // About
-        if (lowerMessage.match(/(giới thiệu|about|về|khanh là ai|ai là khanh|who is)/)) {
-            return getRandomResponse(ruleBasedResponses.about);
-        }
-        
-        // Skills
-        if (lowerMessage.match(/(kỹ năng|skills|công nghệ|technology|biết gì|can do|expertise)/)) {
-            return getRandomResponse(ruleBasedResponses.skills);
-        }
-        
-        // Contact
-        if (lowerMessage.match(/(liên hệ|contact|email|phone|số điện thoại|địa chỉ|address)/)) {
-            return getRandomResponse(ruleBasedResponses.contact);
-        }
-        
-        // Portfolio/Experience
-        if (lowerMessage.match(/(portfolio|kinh nghiệm|experience|dự án|project|làm việc|work)/)) {
-            return getRandomResponse(ruleBasedResponses.portfolio);
-        }
-        
-        // Default
-        return getRandomResponse(ruleBasedResponses.default);
     }
 
-    function getRandomResponse(responses) {
-        return responses[Math.floor(Math.random() * responses.length)];
-    }
+ 
+  
 
-    // ============================================
-    // XỬ LÝ VỚI OPENAI API
-    // ============================================
     async function getOpenAIResponse(message, conversationHistory) {
         try {
             var response = await fetch(AI_CHAT_CONFIG.apiEndpoint, {
@@ -154,16 +106,12 @@
         }
     }
 
-    // ============================================
-    // XỬ LÝ VỚI CUSTOM API
-    // ============================================
     async function getCustomAPIResponse(message, conversationHistory) {
         try {
             var headers = {
                 'Content-Type': 'application/json'
             };
 
-            // Thêm Authorization header nếu có API key
             if (AI_CHAT_CONFIG.apiKey) {
                 headers['Authorization'] = 'Bearer ' + AI_CHAT_CONFIG.apiKey;
             }
@@ -181,12 +129,10 @@
             }
 
             var data = await response.json();
-            
-            // Xử lý response theo format: { answer, question, success }
+
             if (data.success && data.answer) {
                 return data.answer;
             } else if (data.answer) {
-                // Nếu có answer nhưng không có success field
                 return data.answer;
             } else {
                 throw new Error('Invalid response format');
@@ -197,64 +143,52 @@
         }
     }
 
-    // ============================================
-    // LẤY PHẢN HỒI TỪ AI
-    // ============================================
     async function getAIResponse(message, conversationHistory) {
-        try {
-            if (AI_CHAT_CONFIG.apiType === 'openai') {
-                return await getOpenAIResponse(message, conversationHistory);
-            } else if (AI_CHAT_CONFIG.apiType === 'custom') {
-                return await getCustomAPIResponse(message, conversationHistory);
-            } else {
-                // Rule-based fallback
-                return getRuleBasedResponse(message);
-            }
-        } catch (error) {
-            console.error('AI response error:', error);
-            // Fallback to rule-based
-            return getRuleBasedResponse(message);
+        if (AI_CHAT_CONFIG.apiType === 'openai') {
+            return await getOpenAIResponse(message, conversationHistory);
+        } else if (AI_CHAT_CONFIG.apiType === 'custom') {
+            return await getCustomAPIResponse(message, conversationHistory);
+        } else {
+            throw new Error('Unsupported API type');
         }
     }
 
-    // ============================================
-    // QUẢN LÝ LỊCH SỬ CHAT
-    // ============================================
     var conversationHistory = [];
 
     function addToHistory(role, content) {
         conversationHistory.push({ role: role, content: content });
-        // Giới hạn lịch sử để tránh quá dài
         if (conversationHistory.length > 20) {
             conversationHistory.shift();
         }
     }
 
-    // ============================================
-    // HIỂN THỊ TIN NHẮN
-    // ============================================
-    function addMessage(content, isUser) {
+    function addMessage(content, isUser, isError = false) {
         var chatMessages = document.getElementById('chatMessages');
         if (!chatMessages) return;
-
+    
         var messageDiv = document.createElement('div');
-        messageDiv.className = 'chat-message ' + (isUser ? 'chat-message-user' : 'chat-message-bot');
-
+        messageDiv.className = 'chat-message ' + 
+            (isUser ? 'chat-message-user' : 'chat-message-bot');
+    
+        if (isError) {
+            messageDiv.classList.add('chat-message-error');
+        }
+    
         var avatar = document.createElement('div');
         avatar.className = 'message-avatar';
         avatar.innerHTML = '<i class="bi ' + (isUser ? 'bi-person-fill' : 'bi-robot') + '"></i>';
-
+    
         var messageContent = document.createElement('div');
         messageContent.className = 'message-content';
+    
         var p = document.createElement('p');
         p.textContent = content;
+    
         messageContent.appendChild(p);
-
         messageDiv.appendChild(avatar);
         messageDiv.appendChild(messageContent);
         chatMessages.appendChild(messageDiv);
-
-        // Scroll to bottom
+    
         scrollToBottom();
     }
 
@@ -295,49 +229,36 @@
         }
     }
 
-    // ============================================
-    // XỬ LÝ GỬI TIN NHẮN
-    // ============================================
     async function sendMessage() {
         var chatInput = document.getElementById('chatInput');
         var sendBtn = document.getElementById('chatSendBtn');
-        
+
         if (!chatInput || !sendBtn) return;
 
         var message = chatInput.value.trim();
         if (!message) return;
 
-        // Disable input và button
         chatInput.disabled = true;
         sendBtn.disabled = true;
         sendBtn.classList.add('loading');
 
-        // Hiển thị tin nhắn của user
         addMessage(message, true);
         addToHistory('user', message);
 
-        // Clear input
         chatInput.value = '';
-
-        // Hiển thị loading
         addLoadingMessage();
 
         try {
-            // Lấy phản hồi từ AI
             var response = await getAIResponse(message, conversationHistory);
-            
-            // Xóa loading
-            removeLoadingMessage();
 
-            // Hiển thị phản hồi
+            removeLoadingMessage();
             addMessage(response, false);
             addToHistory('assistant', response);
         } catch (error) {
             console.error('Error sending message:', error);
             removeLoadingMessage();
-            addMessage('Xin lỗi, có lỗi xảy ra. Vui lòng thử lại sau.', false);
+            addMessage('Gửi tin nhắn không thành công. Vui lòng thử lại sau.', false, true);
         } finally {
-            // Enable lại input và button
             chatInput.disabled = false;
             sendBtn.disabled = false;
             sendBtn.classList.remove('loading');
@@ -345,19 +266,14 @@
         }
     }
 
-    // ============================================
-    // KHỞI TẠO EVENT LISTENERS
-    // ============================================
     function initChat() {
         var chatInput = document.getElementById('chatInput');
         var sendBtn = document.getElementById('chatSendBtn');
 
         if (!chatInput || !sendBtn) return;
 
-        // Send button click
         sendBtn.addEventListener('click', sendMessage);
 
-        // Enter key press
         chatInput.addEventListener('keypress', function(e) {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
@@ -365,12 +281,14 @@
             }
         });
 
-        // Focus input when chat opens
         var chatButton = document.getElementById('chatButton');
         var chatWindow = document.getElementById('chatWindow');
-        
+
         if (chatButton && chatWindow) {
             chatButton.addEventListener('click', function() {
+                // Khi user mở chat thì cũng warmup luôn, nếu chưa gọi trước đó
+                warmUpServer();
+
                 setTimeout(function() {
                     if (chatWindow.classList.contains('active')) {
                         chatInput.focus();
@@ -380,14 +298,13 @@
         }
     }
 
-    // ============================================
-    // KHỞI TẠO KHI DOM READY
-    // ============================================
     document.addEventListener('DOMContentLoaded', function() {
         initChat();
+
+        // Gửi request ngầm ngay khi trang load
+        warmUpServer();
     });
 
-    // Export functions for external use
     window.AIChat = {
         sendMessage: sendMessage,
         addMessage: addMessage,
